@@ -727,7 +727,7 @@ traj_indices = [int(round(i * T / (n_show - 1))) for i in range(n_show)]
 traj_imgs    = [trajectory[i][0].reshape(IMG_SIZE, IMG_SIZE).numpy() for i in traj_indices]
 traj_labels  = [T - i for i in traj_indices]   # trajectory index → timestep label
 
-fig, axes = plt.subplots(3, n_show, figsize=(14, 5.5))
+fig, axes = plt.subplots(3, n_show, figsize=(14, 6.5))  # extra height for arrow
 fig.suptitle(
     "Figure C — Real vs Generated Images\n"
     "Row 3 (trajectory): ONE sample denoising from x_T (pure noise) → x_0 (clean)\n"
@@ -742,14 +742,50 @@ for col in range(n_show):
     axes[1, col].axis('off')
 
     axes[2, col].imshow(traj_imgs[col],  cmap='gray', vmin=-1, vmax=1)
-    axes[2, col].set_title(f"t={traj_labels[col]}", fontsize=7)
+    axes[2, col].text(0.5, -0.08, f"t={traj_labels[col]}",
+                      transform=axes[2, col].transAxes,
+                      ha='center', va='top', fontsize=7, color='#333333')
     axes[2, col].axis('off')
 
 axes[0, 0].set_ylabel("Real",       fontsize=9, rotation=0, labelpad=35)
 axes[1, 0].set_ylabel("Generated",  fontsize=9, rotation=0, labelpad=50)
 axes[2, 0].set_ylabel("Trajectory\n(noise→clean)", fontsize=9, rotation=0, labelpad=60)
 
-plt.tight_layout()
+# Reserve bottom margin for the direction arrow, top margin for suptitle
+plt.tight_layout(rect=[0, 0.08, 1, 0.97])
+
+# ── Divider between "Generated" row and "Trajectory" row ─────────────────────
+# A dashed line makes it visually clear that the trajectory row is a separate
+# concept (one sample denoising over time) vs the generated samples above it.
+# get_position() returns axes bounds in figure-fraction coordinates (0→1).
+row1_y0 = axes[1, 0].get_position().y0   # bottom edge of the "Generated" row
+row2_y1 = axes[2, 0].get_position().y1   # top edge of the "Trajectory" row
+div_y   = (row1_y0 + row2_y1) / 2.0     # midpoint between the two rows
+fig.add_artist(
+    plt.Line2D([0.03, 0.97], [div_y, div_y],
+               transform=fig.transFigure,
+               color='#888888', linewidth=1.2, linestyle='--', zorder=10)
+)
+
+# ── Direction arrow below the "Trajectory" row ────────────────────────────────
+# Shows the denoising direction: x_T (pure noise) ──────→ x_0 (clean image)
+# This makes clear that time flows LEFT to RIGHT in the trajectory row,
+# i.e. we START from noise on the left and END at the clean image on the right.
+traj_y0 = axes[2, 0].get_position().y0   # bottom edge of trajectory row
+arrow_y = traj_y0 - 0.04                 # sit just below the row
+
+axes[2, 0].annotate('',
+    xy     =(0.96, arrow_y), xycoords='figure fraction',
+    xytext =(0.04, arrow_y), textcoords='figure fraction',
+    arrowprops=dict(arrowstyle='->', color='#444444', lw=1.8)
+)
+fig.text(0.04, arrow_y - 0.01, 'x_T  — pure noise  (t=20)',
+         ha='left',   va='top', fontsize=7.5, color='#444444')
+fig.text(0.96, arrow_y - 0.01, 'x_0  — clean image  (t=0)',
+         ha='right',  va='top', fontsize=7.5, color='#444444')
+fig.text(0.50, arrow_y - 0.01, 'denoising direction',
+         ha='center', va='top', fontsize=7.5, color='#666666', style='italic')
+
 plt.savefig("generated_samples.png", dpi=120, bbox_inches='tight')
 plt.show()
 plt.close('all')
