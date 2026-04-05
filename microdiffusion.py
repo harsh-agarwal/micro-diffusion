@@ -71,6 +71,15 @@ BATCH_SIZE = 128
 EPOCHS     = 5000
 LR         = 3e-4    # Adam default; works well for small models
 
+# ── Model depth ───────────────────────────────────────────────────────────────
+# Number of hidden layers in the MLP (not counting input/output projections).
+# Each hidden layer is Linear(256, 256) + GELU.
+#   MLP_LAYERS = 2  — fast, lower capacity, good baseline
+#   MLP_LAYERS = 3  — default; sweet spot for 1024-4096 training images
+#   MLP_LAYERS = 4  — more expressive; try this with larger datasets or T≥50
+#   MLP_LAYERS = 6+ — diminishing returns on 16×16 images; risk of overfitting
+MLP_LAYERS = 3
+
 # ── Hardware ──────────────────────────────────────────────────────────────────
 # Device selection priority: CUDA (NVIDIA) > MPS (Apple Silicon) > CPU
 #   CUDA: full-precision NVIDIA GPU — fastest, use on any Linux/Windows machine
@@ -346,13 +355,18 @@ def _show_forward_process():
 class NoisePredictorMLP(nn.Module):
     def __init__(self):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(IMG_DIM + T, 256),  # 256 image pixels + 20 time dims → 256 hidden
-            nn.GELU(),
-            nn.Linear(256, 256),
-            nn.GELU(),
-            nn.Linear(256, IMG_DIM),      # output: predicted noise, same shape as image
-        )
+        # Build the layer list dynamically from MLP_LAYERS.
+        # MLP_LAYERS = total number of Linear layers (input + hidden + output).
+        #   MLP_LAYERS=3 → Linear(276,256) + Linear(256,256) + Linear(256,256)
+        #                   (this is the original hardcoded architecture)
+        #   MLP_LAYERS=4 → adds one more hidden Linear(256,256) in the middle
+        # Minimum is 2 (just input projection + output projection, no hidden layers).
+        assert MLP_LAYERS >= 2, "MLP_LAYERS must be at least 2 (input + output)"
+        layers = [nn.Linear(IMG_DIM + T, 256), nn.GELU()]   # input projection  (1)
+        for _ in range(MLP_LAYERS - 2):                      # hidden layers     (MLP_LAYERS-2)
+            layers += [nn.Linear(256, 256), nn.GELU()]
+        layers += [nn.Linear(256, IMG_DIM)]                  # output projection (1)
+        self.net = nn.Sequential(*layers)
 
     def forward(self, x_t, t):
         """
