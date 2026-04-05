@@ -66,15 +66,22 @@ IMG_DIM  = IMG_SIZE * IMG_SIZE   # 256 pixels, flattened into a vector
 T = 20
 
 # ── Training ──────────────────────────────────────────────────────────────────
-N_SAMPLES  = 1024    # total training images (512 circles + 512 squares)
+N_SAMPLES  = 4096    # total training images (512 circles + 512 squares)
 BATCH_SIZE = 128
-EPOCHS     = 500
+EPOCHS     = 5000
 LR         = 3e-4    # Adam default; works well for small models
 
 # ── Hardware ──────────────────────────────────────────────────────────────────
-# MPS = Metal Performance Shaders (Apple Silicon GPU). ~3x faster than CPU.
-# Falls back to CPU on non-Apple machines. CUDA would be: 'cuda' if available.
-device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
+# Device selection priority: CUDA (NVIDIA) > MPS (Apple Silicon) > CPU
+#   CUDA: full-precision NVIDIA GPU — fastest, use on any Linux/Windows machine
+#   MPS:  Apple Silicon GPU via Metal — ~3x faster than CPU on M-series Macs
+#   CPU:  always available, sufficient for this small model (~2-3 min training)
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+elif torch.backends.mps.is_available():
+    device = torch.device('mps')
+else:
+    device = torch.device('cpu')
 print(f"Using device: {device}")
 
 torch.manual_seed(42)
